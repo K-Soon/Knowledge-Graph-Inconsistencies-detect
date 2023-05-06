@@ -64,13 +64,8 @@ class transE():
         return np.sum(np.fabs(h + r - t))
     '''
 
-    def dist(self, h: np.array, r: np.array, t: np.array, hd:int,td:int) -> float:
-        if hd>td:
-            return np.sum(np.square(h + r - t - self.BGT))
-        elif hd<td:
-            return np.sum(np.square(h-r-t-self.LET))
-        else:
-            return np.sum(np.square(h-t-self.EQ))
+    def dist(self, h: np.array, r: np.array, t: np.array, target:np.array) -> float:
+        return np.sum(np.square(h + r - t - target))
 
 
     @staticmethod
@@ -107,11 +102,10 @@ class transE():
             else:
                 target=self.BGT
                 flagEQ=1
-
             rel_dist = self.dist(self.entities[rel_head], self.relations[relation], self.entities[rel_tail],
-                                 rel_batch[1],rel_batch[4])
+                                 target)
             corr_dist = self.dist(self.entities[rel_head], self.relations[relation], self.entities[rel_tail],
-                                  rel_batch[4],rel_batch[1])
+                                  -1*target)
             # hinge loss
             loss = rel_dist - corr_dist + self.margin
             if loss >= 0:
@@ -123,34 +117,20 @@ class transE():
                     batch_entities[rel_tail] = self.entities[rel_tail]
                 if relation not in batch_relations:
                     batch_relations[relation] = self.relations[relation]
-                if rel_batch[1]>rel_batch[4]:
-                    grad_pos = 2 * (self.entities[rel_head] +self.relations[relation] - self.entities[rel_tail]-target)
-                    grad_head=grad_pos
-                    grad_relation=grad_pos
-                    grad_tail=-1*grad_pos
-                elif rel_batch[1]<rel_batch[4]:
-                    grad_pos = 2 * (self.entities[rel_head] -self.relations[relation] - self.entities[rel_tail] - target)
-                    grad_head=grad_pos
-                    grad_relation=-1*grad_pos
-                    grad_tail=-1*grad_pos
-                else:
-                    grad_pos=2*(self.entities[rel_head]-self.entities[rel_tail]-target)
-                    grad_head=grad_pos
-                    grad_relation=0*grad_pos
-                    grad_tail=-1*grad_pos
+                grad_pos = 2 * \
+                           (self.entities[rel_head] +
+                            self.relations[relation] - self.entities[rel_tail]-target)
+
                 # update
                 grad_pos *= self.lr
-                grad_head*=self.lr
-                grad_tail*=self.lr
-                grad_relation*=self.lr
                 if self.updateCount[rel_head]==0:
-                    batch_entities[rel_head]-=grad_head
+                    batch_entities[rel_head]-=grad_pos
                     self.updateCount[rel_head]+=1
                 elif self.updateCount[rel_tail]==0:
-                    batch_entities[rel_tail]-=grad_tail
+                    batch_entities[rel_tail]+=grad_pos
                     self.updateCount[rel_tail]+=1
                 elif self.updateCount[relation]==0:
-                    batch_relations[relation]-=grad_relation
+                    batch_relations[relation]-=grad_pos
                     self.updateCount[relation]+=1
                 else:
                     x,y,z=1/self.updateCount[rel_head],1/self.updateCount[relation],1/self.updateCount[rel_tail]
@@ -158,15 +138,18 @@ class transE():
                     # 使刚开始的变化大，后来逐渐减小。86->93
                     x,y,z=x/sum,y/sum,z/sum
                     choice=random.random()
-                    batch_entities[rel_head] -= grad_head * x
+                    batch_entities[rel_head] -= grad_pos * x
                     self.updateCount[rel_head] += 1
 
-                    batch_relations[relation] -= grad_relation * y
+                    batch_relations[relation] -= grad_pos * y
                     self.updateCount[relation] += 1
 
-                    batch_entities[rel_tail] -= grad_tail * z
+                    batch_entities[rel_tail] += grad_pos * z
                     self.updateCount[rel_tail] += 1
 
+                batch_entities[rel_head]=self.norm(batch_entities[rel_head])
+                batch_entities[rel_tail]=self.norm(batch_entities[rel_tail])
+                batch_relations[relation]=self.norm(batch_relations[relation])
 
 
 
@@ -211,9 +194,9 @@ class transE():
         error=0
         equal=0
         for rel_triple in self.triple_rels:
-            flagBGT=self.dist(self.entities[rel_triple[0]],self.relations[rel_triple[2]],self.entities[rel_triple[3]],1,0)
+            flagBGT=self.dist(self.entities[rel_triple[0]],self.relations[rel_triple[2]],self.entities[rel_triple[3]],self.BGT)
             flagLET = self.dist(self.entities[rel_triple[0]], self.relations[rel_triple[2]],
-                                self.entities[rel_triple[3]], 0,1)
+                                self.entities[rel_triple[3]], self.LET)
             if rel_triple[1] > rel_triple[4]:
                 if flagBGT<flagLET:
                     correct+=1
