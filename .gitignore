@@ -3,3 +3,5 @@ data
 venv
 .idea
 *.nt
+people.txt
+baike_triples.txt
