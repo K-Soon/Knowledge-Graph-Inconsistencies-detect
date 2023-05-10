@@ -20,6 +20,7 @@ class transE():
         self.updateCount = {}
         self.triples = triple_rel
         self.rel_triples = [i for i in self.triples]
+        self.errorList=[]
         self.dim = dim
         self.lr = lr
         self.margin = margin
@@ -34,6 +35,7 @@ class transE():
         for i in range(len(self.triples)):
             if random.random() < proportion:
                 self.triples[i][1], self.triples[i][4] = self.triples[i][4], self.triples[i][1]
+                self.errorList.append(i)
 
     def emb_init(self) -> None:
         entities = set()
@@ -214,6 +216,28 @@ class transE():
             else:
                 equal += 1
         print(correct, error, correct / (correct + error), equal)
+        correct=0
+        error=0
+        for i in self.errorList:
+            rel_triple=self.triples[i]
+            flagBGT = self.dist(self.entities[rel_triple[0]], self.relations[rel_triple[2]],
+                                self.entities[rel_triple[3]], self.BGT)
+            flagLET = self.dist(self.entities[rel_triple[0]], self.relations[rel_triple[2]],
+                                self.entities[rel_triple[3]], self.LET)
+            if rel_triple[1] > rel_triple[4]:
+                if flagBGT < flagLET:
+                    error += 1
+                else:
+                    correct += 1
+            elif rel_triple[1] < rel_triple[4]:
+                if flagBGT > flagLET:
+                    error += 1
+                else:
+                    correct += 1
+            else:
+                equal += 1
+        print("Recall::" ,correct, error, correct / (correct + error), equal)
+
 
     '''
     # the classic way is pretty slow due to enormous distance calculations
@@ -300,7 +324,7 @@ def loadTriple():
 triples = loadTriple()
 trans = transE(triple_rel=triples, dim=120, lr=0.3, margin=0)
 # 0.1:0.71  0.01:0.93   0.02:0.90   0.03:0.85
-trans.error_insert(0.03)
+trans.error_insert(0.01)
 trans.emb_init()
 trans.train(epochs=5000, batch=300)
 trans.judge()
